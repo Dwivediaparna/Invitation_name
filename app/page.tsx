@@ -7,7 +7,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
@@ -26,7 +26,7 @@ export default function Home() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [mergeVideo, setMergeVideo] = useState(false);
-  const [bgStyle, setBgStyle] = useState('traditional');
+  const [bgStyle, setBgStyle] = useState('no_ai_card');
   const [aiPrompt, setAiPrompt] = useState('');
   const [invitationText, setInvitationText] = useState('You are cordially invited');
   const [bgImage, setBgImage] = useState<string | null>(null);
@@ -90,8 +90,12 @@ export default function Home() {
   const hasApiKey = geminiApiKey.length > 0;
 
   useEffect(() => {
-    if (bgStyle === 'card_photo') {
+    if (bgStyle === 'card_photo' || bgStyle === 'no_ai_card') {
       setInvitationText('अपर्णा 🥁 दीपक');
+    } else if (bgStyle === 'royal' || bgStyle === 'no_ai_royal') {
+      setInvitationText('You are invited to the\nRoyal Wedding');
+    } else {
+      setInvitationText('You are cordially invited');
     }
   }, [bgStyle]);
 
@@ -248,10 +252,10 @@ export default function Home() {
       // Fallback Background
       const scale = width / 1080;
 
-      if (bgStyle === 'card_photo') {
+      if (bgStyle === 'card_photo' || bgStyle === 'no_ai_card') {
         const gradient = ctx.createLinearGradient(0, 0, width, height);
         gradient.addColorStop(0, '#E8B851'); // Golden yellow
-        gradient.addColorStop(1, '#D49A36');
+        gradient.addColorStop(1, '#D49A36'); // Darker yellow
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
@@ -266,6 +270,28 @@ export default function Home() {
         ctx.arc(width / 2, height * 0.28, 230 * scale, 0, Math.PI * 2);
         ctx.lineWidth = 2 * scale;
         ctx.stroke();
+      } else if (bgStyle === 'no_ai_royal') {
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#510f13'); // Deep maroon
+        gradient.addColorStop(1, '#2c0505');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = '#d4af37'; // Gold
+        ctx.lineWidth = 20 * scale;
+        ctx.strokeRect(40 * scale, 40 * scale, width - 80 * scale, height - 80 * scale);
+        ctx.lineWidth = 4 * scale;
+        ctx.strokeRect(70 * scale, 70 * scale, width - 140 * scale, height - 140 * scale);
+      } else if (bgStyle === 'no_ai_modern') {
+        const gradient = ctx.createLinearGradient(width, 0, 0, height);
+        gradient.addColorStop(0, '#fdf2f8'); // Pink 50
+        gradient.addColorStop(1, '#fbcfe8'); // Pink 200
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.strokeStyle = '#f472b6'; // dark pink
+        ctx.lineWidth = 6 * scale;
+        ctx.strokeRect(60 * scale, 60 * scale, width - 120 * scale, height - 120 * scale);
       } else {
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         gradient.addColorStop(0, '#fff8e7'); // Warm cream
@@ -294,7 +320,7 @@ export default function Home() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    if (bgStyle === 'card_photo') {
+    if (bgStyle === 'card_photo' || bgStyle === 'no_ai_card') {
       ctx.fillStyle = '#7A1712'; // Dark maroon
       ctx.textAlign = 'center';
 
@@ -336,7 +362,7 @@ export default function Home() {
 
       (ctx as any).letterSpacing = '0px';
     } else {
-      ctx.fillStyle = '#8b0000'; // Dark red
+      ctx.fillStyle = bgStyle === 'no_ai_royal' ? '#fdf5e6' : '#8b0000'; // Cream for royal, dark red otherwise
       ctx.font = `italic 600 ${60 * scale}px "Noto Serif Devanagari", Georgia, serif`;
       (ctx as any).letterSpacing = `${1 * scale}px`;
 
@@ -347,7 +373,7 @@ export default function Home() {
         textY += 70 * scale;
       });
 
-      ctx.fillStyle = '#000000';
+      ctx.fillStyle = bgStyle === 'no_ai_royal' ? '#d4af37' : '#000000'; // Gold for royal, black otherwise
       ctx.font = `700 ${90 * scale}px "Noto Serif Devanagari", Arial, sans-serif`;
       (ctx as any).letterSpacing = `${2 * scale}px`;
       ctx.fillText(name, width / 2, textY + 30 * scale);
@@ -382,8 +408,9 @@ export default function Home() {
         height = videoElement.videoHeight;
       }
 
+      const isAiMode = !bgStyle.startsWith('no_ai_');
       let currentBgImage = bgImage;
-      if (!currentBgImage && (bgStyle !== 'custom' || aiPrompt)) {
+      if (isAiMode && !currentBgImage && (bgStyle !== 'custom' || aiPrompt)) {
         setStatusText('Generating AI background...');
         currentBgImage = await fetchAiBackground();
         if (currentBgImage) {
@@ -393,6 +420,8 @@ export default function Home() {
           setIsProcessing(false);
           return; // Stop processing if background generation fails
         }
+      } else if (!isAiMode) {
+        currentBgImage = null; // Always use local canvas drawing for no_ai modes
       }
 
       setStatusText('Generating intro frame...');
@@ -536,13 +565,23 @@ export default function Home() {
                       <SelectValue placeholder="Select a style" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="traditional">Traditional Indian</SelectItem>
-                      <SelectItem value="modern">Modern Minimalist</SelectItem>
-                      <SelectItem value="floral">Romantic Floral</SelectItem>
-                      <SelectItem value="royal">Royal Rajput</SelectItem>
-                      <SelectItem value="card_photo">Yellow Ganesha Card (Like Photo)</SelectItem>
-                      <SelectItem value="match">Match Original Video</SelectItem>
-                      <SelectItem value="custom">Custom Prompt</SelectItem>
+                      <SelectGroup>
+                        <SelectLabel>Instant Backgrounds (No AI Needed)</SelectLabel>
+                        <SelectItem value="no_ai_card">Yellow Ganesha Card (Instant)</SelectItem>
+                        <SelectItem value="no_ai_royal">Royal Maroon (Instant)</SelectItem>
+                        <SelectItem value="no_ai_floral">Elegant Cream & Gold (Instant)</SelectItem>
+                        <SelectItem value="no_ai_modern">Modern Pink (Instant)</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                        <SelectLabel>AI Generated Backgrounds (Requires API Key)</SelectLabel>
+                        <SelectItem value="traditional">Traditional Indian (AI)</SelectItem>
+                        <SelectItem value="modern">Modern Minimalist (AI)</SelectItem>
+                        <SelectItem value="floral">Romantic Floral (AI)</SelectItem>
+                        <SelectItem value="royal">Royal Rajput (AI)</SelectItem>
+                        <SelectItem value="card_photo">AI Ganesha Card (AI)</SelectItem>
+                        <SelectItem value="match">Match Original Video (AI)</SelectItem>
+                        <SelectItem value="custom">Custom Prompt (AI)</SelectItem>
+                      </SelectGroup>
                     </SelectContent>
                   </Select>
                 </div>
@@ -566,20 +605,22 @@ export default function Home() {
                 )}
 
                 <div className="flex gap-4 items-start">
-                  <Button
-                    onClick={generateBackground}
-                    disabled={isGeneratingBg || isProcessing || (bgStyle === 'custom' && !aiPrompt) || (bgStyle === 'match' && !videoFile)}
-                    variant="secondary"
-                    className="shrink-0"
-                  >
-                    {isGeneratingBg ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
-                    )}
-                    Generate Background
-                  </Button>
-                  {bgImage && (
+                  {!bgStyle.startsWith('no_ai_') && (
+                    <Button
+                      onClick={generateBackground}
+                      disabled={isGeneratingBg || isProcessing || (bgStyle === 'custom' && !aiPrompt) || (bgStyle === 'match' && !videoFile)}
+                      variant="secondary"
+                      className="shrink-0"
+                    >
+                      {isGeneratingBg ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4 text-amber-500" />
+                      )}
+                      Generate AI Background Preview
+                    </Button>
+                  )}
+                  {bgImage && !bgStyle.startsWith('no_ai_') && (
                     <div className="relative w-16 h-24 rounded-md overflow-hidden border shadow-sm shrink-0">
                       <img src={bgImage} alt="Generated Background" className="object-cover w-full h-full" />
                     </div>
