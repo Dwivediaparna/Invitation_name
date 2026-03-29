@@ -1,9 +1,9 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
 import './globals.css';
 import { Geist, Noto_Serif_Devanagari } from "next/font/google";
 import { cn } from "@/lib/utils";
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 const notoSerifDevanagari = Noto_Serif_Devanagari({
   weight: ['400', '500', '600', '700'],
   subsets: ['devanagari'],
@@ -11,11 +11,11 @@ const notoSerifDevanagari = Noto_Serif_Devanagari({
 });
 
 export const metadata: Metadata = {
-  title: 'My Google AI Studio App',
-  description: 'My Google AI Studio App',
+  title: 'Invitation Personalizer',
+  description: 'Invitation Personalizer',
 };
 
-export default function RootLayout({children}: {children: React.ReactNode}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={cn("font-sans", geist.variable, notoSerifDevanagari.variable)}>
       <body suppressHydrationWarning>{children}</body>
