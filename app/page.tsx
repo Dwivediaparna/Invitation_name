@@ -161,18 +161,14 @@ export default function Home() {
         setStatusText('Generating matching background...');
       }
 
+
       if (!finalPrompt) return null;
 
-      // Use gemini-2.0-flash-exp for image generation (has free-tier quota)
-      // Requires responseModalities: ["TEXT", "IMAGE"] for native image output
+      // Use gemini-3.1-flash-image-preview (Nano Banana 2) for image generation
+      // Official docs: https://ai.google.dev/gemini-api/docs/image-generation
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-exp',
-        contents: {
-          parts: [{ text: `Generate an image: ${finalPrompt}. The image must be in portrait 9:16 aspect ratio.` }],
-        },
-        config: {
-          responseModalities: ["TEXT", "IMAGE"],
-        }
+        model: 'gemini-3.1-flash-image-preview',
+        contents: `Generate an image: ${finalPrompt}. The image must be in portrait 9:16 aspect ratio.`,
       });
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
