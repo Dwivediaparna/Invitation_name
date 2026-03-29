@@ -91,7 +91,7 @@ export default function Home() {
     });
   };
 
-  const fetchAiBackground = async (): Promise<string | null> => {
+  const fetchAiBackground = async (retryCount = 0): Promise<string | null> => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
       let finalPrompt = aiPrompt;
@@ -105,12 +105,12 @@ export default function Home() {
       } else if (bgStyle === 'royal') {
         finalPrompt = 'A royal Rajput style palace invitation background, intricate arches, deep maroon and rich gold colors, majestic and luxurious, empty center for text, portrait orientation.';
       } else if (bgStyle === 'card_photo') {
-        finalPrompt = 'A blank traditional Indian wedding invitation card background. Golden yellow textured paper. Top center has a beautiful red and gold Lord Ganesha illustration surrounded by auspicious symbols like Om and Kalash. The entire bottom half and center MUST be completely empty golden yellow paper with NO text and NO objects. Portrait orientation, clean, highly detailed.';
+        finalPrompt = 'A blank traditional Indian wedding invitation card background. Golden yellow textured paper. Top center has a beautiful traditional Indian elephant motif (Ganesha) in red and gold, surrounded by auspicious wedding symbols. The entire bottom half and center MUST be completely empty golden yellow paper with NO text and NO objects. Portrait orientation, clean, highly detailed.';
       } else if (bgStyle === 'match' && videoFile) {
         setStatusText('Analyzing video style...');
         const frameDataUrl = await extractFrame(videoFile);
         const base64Data = frameDataUrl.split(',')[1];
-        
+
         const visionResponse = await ai.models.generateContent({
           model: 'gemini-3.1-flash-preview',
           contents: {
@@ -138,7 +138,7 @@ export default function Home() {
           }
         }
       });
-      
+
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) {
           const base64EncodeString = part.inlineData.data;
@@ -146,8 +146,14 @@ export default function Home() {
           return `data:${mimeType};base64,${base64EncodeString}`;
         }
       }
+      throw new Error("No image data found in AI response");
     } catch (error) {
       console.error('Error generating background:', error);
+      if (retryCount < 2) {
+        setStatusText(`Retrying background generation... (${retryCount + 1}/2)`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return fetchAiBackground(retryCount + 1);
+      }
     }
     return null;
   };
@@ -174,16 +180,18 @@ export default function Home() {
 
     if (bgImageUrl) {
       const img = new Image();
-      img.crossOrigin = "anonymous";
+      if (!bgImageUrl.startsWith('data:')) {
+        img.crossOrigin = "anonymous";
+      }
       await new Promise((resolve, reject) => {
         img.onload = resolve;
-        img.onerror = reject;
+        img.onerror = () => reject(new Error("Failed to load background image"));
         img.src = bgImageUrl;
       });
       ctx.drawImage(img, 0, 0, width, height);
 
       const scale = width / 1080;
-      
+
       if (bgStyle !== 'card_photo') {
         // Elegant overlay for text readability
         ctx.save();
@@ -199,331 +207,25 @@ export default function Home() {
     } else {
       // Fallback Background
       const scale = width / 1080;
-      
+
       if (bgStyle === 'card_photo') {
-        // Golden textured background
         const gradient = ctx.createLinearGradient(0, 0, width, height);
-        gradient.addColorStop(0, '#E8B851');
-        gradient.addColorStop(0.5, '#D4A535');
-        gradient.addColorStop(1, '#C4922A');
+        gradient.addColorStop(0, '#E8B851'); // Golden yellow
+        gradient.addColorStop(1, '#D49A36');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        // Subtle texture overlay
-        for (let i = 0; i < 800; i++) {
-          ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.03})`;
-          ctx.fillRect(Math.random() * width, Math.random() * height, Math.random() * 3 * scale, Math.random() * 3 * scale);
-        }
+        // Faint mandala/circle at the top to represent where Ganesha goes
+        ctx.beginPath();
+        ctx.arc(width / 2, height * 0.28, 250 * scale, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(122, 23, 18, 0.15)'; // Faint maroon
+        ctx.lineWidth = 5 * scale;
+        ctx.stroke();
 
-        // Ornate double border
-        ctx.strokeStyle = '#7A1712';
-        ctx.lineWidth = 6 * scale;
-        ctx.strokeRect(30 * scale, 30 * scale, width - 60 * scale, height - 60 * scale);
+        ctx.beginPath();
+        ctx.arc(width / 2, height * 0.28, 230 * scale, 0, Math.PI * 2);
         ctx.lineWidth = 2 * scale;
-        ctx.strokeRect(42 * scale, 42 * scale, width - 84 * scale, height - 84 * scale);
-
-        // Corner flourishes
-        const drawCornerFlourish = (cx: number, cy: number, flipX: number, flipY: number) => {
-          ctx.save();
-          ctx.translate(cx, cy);
-          ctx.scale(flipX, flipY);
-          ctx.strokeStyle = '#7A1712';
-          ctx.lineWidth = 3 * scale;
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.quadraticCurveTo(40 * scale, 5 * scale, 60 * scale, 30 * scale);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(0, 0);
-          ctx.quadraticCurveTo(5 * scale, 40 * scale, 30 * scale, 60 * scale);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(20 * scale, 20 * scale, 8 * scale, 0, Math.PI * 2);
-          ctx.fillStyle = '#7A1712';
-          ctx.fill();
-          ctx.restore();
-        };
-        drawCornerFlourish(50 * scale, 50 * scale, 1, 1);
-        drawCornerFlourish(width - 50 * scale, 50 * scale, -1, 1);
-        drawCornerFlourish(50 * scale, height - 50 * scale, 1, -1);
-        drawCornerFlourish(width - 50 * scale, height - 50 * scale, -1, -1);
-
-        // === Lord Ganesha Illustration ===
-        const gcx = width / 2; // center x
-        const gcy = height * 0.26; // center y
-
-        // Mandala rings behind Ganesha
-        for (let r = 0; r < 3; r++) {
-          const radius = (200 + r * 30) * scale;
-          ctx.beginPath();
-          ctx.arc(gcx, gcy, radius, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(122, 23, 18, ${0.12 - r * 0.03})`;
-          ctx.lineWidth = (3 - r) * scale;
-          ctx.stroke();
-          // Dots on mandala
-          const dots = 24 - r * 4;
-          for (let d = 0; d < dots; d++) {
-            const angle = (d / dots) * Math.PI * 2;
-            const dx = gcx + Math.cos(angle) * radius;
-            const dy = gcy + Math.sin(angle) * radius;
-            ctx.beginPath();
-            ctx.arc(dx, dy, (3 - r) * scale, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(122, 23, 18, ${0.2 - r * 0.05})`;
-            ctx.fill();
-          }
-        }
-
-        // Glow / aura behind Ganesha
-        const glow = ctx.createRadialGradient(gcx, gcy, 0, gcx, gcy, 160 * scale);
-        glow.addColorStop(0, 'rgba(255, 200, 50, 0.3)');
-        glow.addColorStop(1, 'rgba(255, 200, 50, 0)');
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(gcx, gcy, 160 * scale, 0, Math.PI * 2);
-        ctx.fill();
-
-        // --- Ganesha Body (stylized) ---
-        const gs = scale; // ganesha scale factor
-
-        // Lotus base
-        ctx.save();
-        for (let p = 0; p < 10; p++) {
-          const angle = (p / 10) * Math.PI * 2 - Math.PI / 2;
-          const px = gcx + Math.cos(angle) * 90 * gs;
-          const py = gcy + 120 * gs + Math.sin(angle) * 20 * gs;
-          ctx.beginPath();
-          ctx.ellipse(px, py, 35 * gs, 18 * gs, angle + Math.PI / 2, 0, Math.PI * 2);
-          ctx.fillStyle = p % 2 === 0 ? '#C0392B' : '#E74C3C';
-          ctx.fill();
-          ctx.strokeStyle = '#922B21';
-          ctx.lineWidth = 1.5 * gs;
-          ctx.stroke();
-        }
-        ctx.restore();
-
-        // Belly / body
-        ctx.beginPath();
-        ctx.ellipse(gcx, gcy + 50 * gs, 75 * gs, 80 * gs, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#C0392B';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 3 * gs;
         ctx.stroke();
-
-        // Belly band (golden)
-        ctx.beginPath();
-        ctx.ellipse(gcx, gcy + 50 * gs, 78 * gs, 30 * gs, 0, 0.1, Math.PI - 0.1);
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 4 * gs;
-        ctx.stroke();
-
-        // Head
-        ctx.beginPath();
-        ctx.ellipse(gcx, gcy - 30 * gs, 60 * gs, 65 * gs, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#E74C3C';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 3 * gs;
-        ctx.stroke();
-
-        // Left ear
-        ctx.beginPath();
-        ctx.ellipse(gcx - 65 * gs, gcy - 20 * gs, 30 * gs, 40 * gs, -0.3, 0, Math.PI * 2);
-        ctx.fillStyle = '#C0392B';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 2.5 * gs;
-        ctx.stroke();
-        // Inner ear
-        ctx.beginPath();
-        ctx.ellipse(gcx - 63 * gs, gcy - 18 * gs, 18 * gs, 28 * gs, -0.3, 0, Math.PI * 2);
-        ctx.fillStyle = '#E8B851';
-        ctx.fill();
-
-        // Right ear
-        ctx.beginPath();
-        ctx.ellipse(gcx + 65 * gs, gcy - 20 * gs, 30 * gs, 40 * gs, 0.3, 0, Math.PI * 2);
-        ctx.fillStyle = '#C0392B';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 2.5 * gs;
-        ctx.stroke();
-        // Inner ear
-        ctx.beginPath();
-        ctx.ellipse(gcx + 63 * gs, gcy - 18 * gs, 18 * gs, 28 * gs, 0.3, 0, Math.PI * 2);
-        ctx.fillStyle = '#E8B851';
-        ctx.fill();
-
-        // Crown / Mukut
-        ctx.beginPath();
-        ctx.moveTo(gcx - 45 * gs, gcy - 80 * gs);
-        ctx.lineTo(gcx - 30 * gs, gcy - 130 * gs);
-        ctx.lineTo(gcx - 15 * gs, gcy - 100 * gs);
-        ctx.lineTo(gcx, gcy - 145 * gs);
-        ctx.lineTo(gcx + 15 * gs, gcy - 100 * gs);
-        ctx.lineTo(gcx + 30 * gs, gcy - 130 * gs);
-        ctx.lineTo(gcx + 45 * gs, gcy - 80 * gs);
-        ctx.closePath();
-        ctx.fillStyle = '#D4AF37';
-        ctx.fill();
-        ctx.strokeStyle = '#B8860B';
-        ctx.lineWidth = 2 * gs;
-        ctx.stroke();
-
-        // Crown jewels
-        const crownJewels = [
-          { x: -30, y: -120 },
-          { x: 0, y: -135 },
-          { x: 30, y: -120 },
-        ];
-        crownJewels.forEach(j => {
-          ctx.beginPath();
-          ctx.arc(gcx + j.x * gs, gcy + j.y * gs, 6 * gs, 0, Math.PI * 2);
-          ctx.fillStyle = '#E74C3C';
-          ctx.fill();
-          ctx.strokeStyle = '#D4AF37';
-          ctx.lineWidth = 2 * gs;
-          ctx.stroke();
-        });
-
-        // Eyes
-        ctx.beginPath();
-        ctx.ellipse(gcx - 22 * gs, gcy - 35 * gs, 12 * gs, 8 * gs, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(gcx - 22 * gs, gcy - 35 * gs, 5 * gs, 0, Math.PI * 2);
-        ctx.fillStyle = '#1A1A1A';
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.ellipse(gcx + 22 * gs, gcy - 35 * gs, 12 * gs, 8 * gs, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(gcx + 22 * gs, gcy - 35 * gs, 5 * gs, 0, Math.PI * 2);
-        ctx.fillStyle = '#1A1A1A';
-        ctx.fill();
-
-        // Tilak on forehead
-        ctx.beginPath();
-        ctx.moveTo(gcx, gcy - 60 * gs);
-        ctx.lineTo(gcx - 8 * gs, gcy - 48 * gs);
-        ctx.lineTo(gcx + 8 * gs, gcy - 48 * gs);
-        ctx.closePath();
-        ctx.fillStyle = '#D4AF37';
-        ctx.fill();
-
-        // Trunk (curving to the left)
-        ctx.beginPath();
-        ctx.moveTo(gcx - 8 * gs, gcy - 10 * gs);
-        ctx.quadraticCurveTo(gcx - 50 * gs, gcy + 20 * gs, gcx - 40 * gs, gcy + 60 * gs);
-        ctx.quadraticCurveTo(gcx - 35 * gs, gcy + 75 * gs, gcx - 20 * gs, gcy + 70 * gs);
-        ctx.quadraticCurveTo(gcx - 30 * gs, gcy + 55 * gs, gcx - 35 * gs, gcy + 40 * gs);
-        ctx.quadraticCurveTo(gcx - 40 * gs, gcy + 10 * gs, gcx + 5 * gs, gcy - 10 * gs);
-        ctx.fillStyle = '#E74C3C';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 2 * gs;
-        ctx.stroke();
-
-        // Trunk tip curl
-        ctx.beginPath();
-        ctx.arc(gcx - 25 * gs, gcy + 68 * gs, 8 * gs, 0, Math.PI * 2);
-        ctx.fillStyle = '#E74C3C';
-        ctx.fill();
-
-        // Tusk (right side)
-        ctx.beginPath();
-        ctx.moveTo(gcx + 12 * gs, gcy - 5 * gs);
-        ctx.quadraticCurveTo(gcx + 20 * gs, gcy + 15 * gs, gcx + 15 * gs, gcy + 25 * gs);
-        ctx.lineTo(gcx + 10 * gs, gcy + 20 * gs);
-        ctx.quadraticCurveTo(gcx + 13 * gs, gcy + 10 * gs, gcx + 8 * gs, gcy - 3 * gs);
-        ctx.fillStyle = '#FFFFF0';
-        ctx.fill();
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 1 * gs;
-        ctx.stroke();
-
-        // Left arm holding modak (sweet)
-        ctx.beginPath();
-        ctx.ellipse(gcx - 60 * gs, gcy + 60 * gs, 15 * gs, 20 * gs, -0.5, 0, Math.PI * 2);
-        ctx.fillStyle = '#C0392B';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 2 * gs;
-        ctx.stroke();
-        // Modak
-        ctx.beginPath();
-        ctx.arc(gcx - 70 * gs, gcy + 48 * gs, 12 * gs, 0, Math.PI * 2);
-        ctx.fillStyle = '#F5DEB3';
-        ctx.fill();
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 1.5 * gs;
-        ctx.stroke();
-
-        // Right arm raised (blessing)
-        ctx.beginPath();
-        ctx.ellipse(gcx + 65 * gs, gcy + 30 * gs, 15 * gs, 25 * gs, 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = '#C0392B';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 2 * gs;
-        ctx.stroke();
-        // Palm (blessing gesture)
-        ctx.beginPath();
-        ctx.ellipse(gcx + 75 * gs, gcy + 10 * gs, 14 * gs, 16 * gs, 0.2, 0, Math.PI * 2);
-        ctx.fillStyle = '#E74C3C';
-        ctx.fill();
-        ctx.strokeStyle = '#922B21';
-        ctx.lineWidth = 1.5 * gs;
-        ctx.stroke();
-
-        // Necklace
-        ctx.beginPath();
-        ctx.ellipse(gcx, gcy + 10 * gs, 45 * gs, 20 * gs, 0, 0.2, Math.PI - 0.2);
-        ctx.strokeStyle = '#D4AF37';
-        ctx.lineWidth = 4 * gs;
-        ctx.stroke();
-        // Necklace gems
-        for (let n = 0; n < 7; n++) {
-          const nAngle = 0.3 + ((Math.PI - 0.6) / 6) * n;
-          const nx = gcx + Math.cos(nAngle) * 45 * gs;
-          const ny = gcy + 10 * gs + Math.sin(nAngle) * 20 * gs;
-          ctx.beginPath();
-          ctx.arc(nx, ny, 4 * gs, 0, Math.PI * 2);
-          ctx.fillStyle = n % 2 === 0 ? '#E74C3C' : '#2ECC71';
-          ctx.fill();
-          ctx.strokeStyle = '#D4AF37';
-          ctx.lineWidth = 1 * gs;
-          ctx.stroke();
-        }
-
-        // Om symbol (ॐ) at top
-        ctx.font = `bold ${50 * gs}px "Noto Serif Devanagari", serif`;
-        ctx.fillStyle = '#7A1712';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('ॐ', gcx, gcy - 175 * gs);
-
-        // Decorative divider line below Ganesha
-        const divY = gcy + 155 * gs;
-        ctx.beginPath();
-        ctx.moveTo(width * 0.2, divY);
-        ctx.lineTo(width * 0.8, divY);
-        ctx.strokeStyle = '#7A1712';
-        ctx.lineWidth = 2 * gs;
-        ctx.stroke();
-        // Center diamond on divider
-        ctx.beginPath();
-        ctx.moveTo(gcx, divY - 8 * gs);
-        ctx.lineTo(gcx + 8 * gs, divY);
-        ctx.lineTo(gcx, divY + 8 * gs);
-        ctx.lineTo(gcx - 8 * gs, divY);
-        ctx.closePath();
-        ctx.fillStyle = '#7A1712';
-        ctx.fill();
-
       } else {
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         gradient.addColorStop(0, '#fff8e7'); // Warm cream
@@ -551,11 +253,11 @@ export default function Home() {
     // Text
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    
+
     if (bgStyle === 'card_photo') {
       ctx.fillStyle = '#7A1712'; // Dark maroon
       ctx.textAlign = 'center';
-      
+
       // 1. ।। श्री गणपतये नमः ।।
       ctx.font = `500 ${35 * scale}px "Noto Serif Devanagari", serif`;
       (ctx as any).letterSpacing = `${2 * scale}px`;
@@ -591,13 +293,13 @@ export default function Home() {
       ctx.strokeStyle = '#7A1712';
       ctx.lineWidth = 3 * scale;
       ctx.stroke();
-      
+
       (ctx as any).letterSpacing = '0px';
     } else {
       ctx.fillStyle = '#8b0000'; // Dark red
       ctx.font = `italic 600 ${60 * scale}px "Noto Serif Devanagari", Georgia, serif`;
       (ctx as any).letterSpacing = `${1 * scale}px`;
-      
+
       const lines = invitationText.split('\n');
       let textY = height / 2 - 100 * scale;
       lines.forEach((line) => {
@@ -609,10 +311,10 @@ export default function Home() {
       ctx.font = `700 ${90 * scale}px "Noto Serif Devanagari", Arial, sans-serif`;
       (ctx as any).letterSpacing = `${2 * scale}px`;
       ctx.fillText(name, width / 2, textY + 30 * scale);
-      
+
       (ctx as any).letterSpacing = '0px';
     }
-    
+
     return canvas.toDataURL('image/png');
   };
 
@@ -625,7 +327,7 @@ export default function Home() {
 
     try {
       const ffmpeg = ffmpegRef.current;
-      
+
       let width = 1080;
       let height = 1920;
 
@@ -644,7 +346,13 @@ export default function Home() {
       if (!currentBgImage && (bgStyle !== 'custom' || aiPrompt)) {
         setStatusText('Generating AI background...');
         currentBgImage = await fetchAiBackground();
-        if (currentBgImage) setBgImage(currentBgImage);
+        if (currentBgImage) {
+          setBgImage(currentBgImage);
+        } else {
+          setStatusText('Failed to generate AI background. Please try again or change the prompt.');
+          setIsProcessing(false);
+          return; // Stop processing if background generation fails
+        }
       }
 
       setStatusText('Generating intro frame...');
@@ -656,7 +364,7 @@ export default function Home() {
 
       setStatusText('Writing files to memory...');
       await ffmpeg.writeFile('image.png', new Uint8Array(imageArrayBuffer));
-      
+
       setStatusText('Creating silent audio...');
       await ffmpeg.exec([
         '-f', 'lavfi',
@@ -730,7 +438,7 @@ export default function Home() {
                 <div className="space-y-2">
                   <Label className="text-base">1. Generate AI Background</Label>
                   <p className="text-sm text-neutral-500">Choose a theme or match your original video.</p>
-                  
+
                   <Select value={bgStyle} onValueChange={(val) => { if (val) { setBgStyle(val); setBgImage(null); } }} disabled={isGeneratingBg || isProcessing}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select a style" />
@@ -750,10 +458,10 @@ export default function Home() {
                 {bgStyle === 'custom' && (
                   <div className="space-y-2">
                     <Label htmlFor="aiPrompt">Custom Prompt</Label>
-                    <Textarea 
-                      id="aiPrompt" 
+                    <Textarea
+                      id="aiPrompt"
                       placeholder="Describe your perfect invitation background..."
-                      value={aiPrompt} 
+                      value={aiPrompt}
                       onChange={(e) => { setAiPrompt(e.target.value); setBgImage(null); }}
                       disabled={isGeneratingBg || isProcessing}
                       className="min-h-[80px]"
@@ -764,10 +472,10 @@ export default function Home() {
                 {bgStyle === 'match' && !videoFile && (
                   <p className="text-sm text-amber-600">Please upload an original video below to use this feature.</p>
                 )}
-                
+
                 <div className="flex gap-4 items-start">
-                  <Button 
-                    onClick={generateBackground} 
+                  <Button
+                    onClick={generateBackground}
                     disabled={isGeneratingBg || isProcessing || (bgStyle === 'custom' && !aiPrompt) || (bgStyle === 'match' && !videoFile)}
                     variant="secondary"
                     className="shrink-0"
@@ -816,13 +524,13 @@ export default function Home() {
 
               <div className="space-y-4">
                 <Label className="text-base">3. Text Content</Label>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="invitationText">Invitation Text (Supports Hindi)</Label>
-                  <Textarea 
-                    id="invitationText" 
-                    placeholder="e.g. You are cordially invited / सप्रेम आमंत्रण" 
-                    value={invitationText} 
+                  <Textarea
+                    id="invitationText"
+                    placeholder="e.g. You are cordially invited / सप्रेम आमंत्रण"
+                    value={invitationText}
                     onChange={(e) => setInvitationText(e.target.value)}
                     disabled={isProcessing}
                     className="min-h-[80px]"
@@ -831,19 +539,19 @@ export default function Home() {
 
                 <div className="space-y-2">
                   <Label htmlFor="name">Guest Name (Supports Hindi)</Label>
-                  <Input 
-                    id="name" 
-                    placeholder="e.g. The Smith Family / शर्मा परिवार" 
-                    value={name} 
+                  <Input
+                    id="name"
+                    placeholder="e.g. The Smith Family / शर्मा परिवार"
+                    value={name}
                     onChange={(e) => setName(e.target.value)}
                     disabled={isProcessing}
                   />
                 </div>
               </div>
 
-              <Button 
-                className="w-full" 
-                onClick={processVideo} 
+              <Button
+                className="w-full"
+                onClick={processVideo}
                 disabled={!name || !invitationText || !isReady || isProcessing || (mergeVideo && !videoFile)}
               >
                 {isProcessing ? (
