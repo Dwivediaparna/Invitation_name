@@ -12,7 +12,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Video, Download, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { Loader2, Video, Download, Sparkles, Image as ImageIcon, AlertTriangle, KeyRound, Check } from 'lucide-react';
+
+// Build-time env var (set via GitHub Secrets during CI/CD)
+const BUILD_TIME_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 
 export default function Home() {
   const [name, setName] = useState('');
@@ -28,6 +31,9 @@ export default function Home() {
   const [invitationText, setInvitationText] = useState('You are cordially invited');
   const [bgImage, setBgImage] = useState<string | null>(null);
   const [isGeneratingBg, setIsGeneratingBg] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState(BUILD_TIME_API_KEY);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const ffmpegRef = useRef<any>(null);
 
   const loadFFmpeg = async () => {
@@ -56,7 +62,32 @@ export default function Home() {
 
   useEffect(() => {
     loadFFmpeg();
+    // Load API key from localStorage (runtime fallback)
+    const storedKey = localStorage.getItem('gemini_api_key');
+    if (storedKey) {
+      setGeminiApiKey(storedKey);
+    } else if (!BUILD_TIME_API_KEY) {
+      setShowApiKeyInput(true);
+    }
   }, []);
+
+  const saveApiKey = () => {
+    if (apiKeyInput.trim()) {
+      const key = apiKeyInput.trim();
+      localStorage.setItem('gemini_api_key', key);
+      setGeminiApiKey(key);
+      setShowApiKeyInput(false);
+      setApiKeyInput('');
+    }
+  };
+
+  const clearApiKey = () => {
+    localStorage.removeItem('gemini_api_key');
+    setGeminiApiKey(BUILD_TIME_API_KEY);
+    setShowApiKeyInput(true);
+  };
+
+  const hasApiKey = geminiApiKey.length > 0;
 
   useEffect(() => {
     if (bgStyle === 'card_photo') {
@@ -92,8 +123,13 @@ export default function Home() {
   };
 
   const fetchAiBackground = async (retryCount = 0): Promise<string | null> => {
+    if (!geminiApiKey) {
+      setStatusText('⚠️ No Gemini API key configured. Please add your key above.');
+      setShowApiKeyInput(true);
+      return null;
+    }
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
       let finalPrompt = aiPrompt;
 
       if (bgStyle === 'traditional') {
@@ -426,6 +462,58 @@ export default function Home() {
           <h1 className="text-4xl font-bold tracking-tight text-neutral-900">Invitation Personalizer</h1>
           <p className="text-neutral-500">Add a personalized 5-second intro frame to your invitation video.</p>
         </div>
+
+        {/* API Key Configuration Banner */}
+        {showApiKeyInput && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+              <div className="space-y-1">
+                <p className="font-medium text-amber-900">Gemini API Key Required</p>
+                <p className="text-sm text-amber-700">
+                  AI background generation requires a Google Gemini API key.
+                  Get your free key at{' '}
+                  <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="underline font-medium hover:text-amber-900">
+                    aistudio.google.com/apikey
+                  </a>
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <Input
+                  type="password"
+                  placeholder="Paste your Gemini API key here (AIza...)"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
+                  className="pl-9 bg-white"
+                />
+              </div>
+              <Button onClick={saveApiKey} disabled={!apiKeyInput.trim()} size="default">
+                <Check className="h-4 w-4 mr-1" />
+                Save Key
+              </Button>
+            </div>
+            <p className="text-xs text-amber-600">
+              🔒 Your key is stored only in your browser&apos;s localStorage. It is never sent to any server other than Google&apos;s API.
+            </p>
+          </div>
+        )}
+        {hasApiKey && !showApiKeyInput && (
+          <div className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 px-4 py-2">
+            <div className="flex items-center gap-2 text-sm text-green-800">
+              <Check className="h-4 w-4" />
+              <span>Gemini API key configured {!BUILD_TIME_API_KEY && '(saved in browser)'}</span>
+            </div>
+            {!BUILD_TIME_API_KEY && (
+              <Button variant="ghost" size="sm" onClick={clearApiKey} className="text-green-700 hover:text-red-600 text-xs h-7">
+                Change Key
+              </Button>
+            )}
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-8">
           <Card>
