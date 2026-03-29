@@ -270,6 +270,30 @@ export default function Home() {
         ctx.arc(width / 2, height * 0.28, 230 * scale, 0, Math.PI * 2);
         ctx.lineWidth = 2 * scale;
         ctx.stroke();
+
+        try {
+          const ganeshaImg = new window.Image();
+          ganeshaImg.crossOrigin = "anonymous";
+          ganeshaImg.src = './ganesha.png';
+
+          await new Promise((resolve, reject) => {
+            ganeshaImg.onload = resolve;
+            ganeshaImg.onerror = () => resolve(false); // Fallback gracefully if image is missing
+          });
+
+          if (ganeshaImg.width > 0) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            // The image has a white background, multiply will remove white and keep the dark red lines
+            const imgSize = 400 * scale;
+            const imgX = (width / 2) - (imgSize / 2);
+            const imgY = (height * 0.28) - (imgSize / 2);
+            ctx.drawImage(ganeshaImg, imgX, imgY, imgSize, imgSize);
+            ctx.restore();
+          }
+        } catch (e) {
+          console.error("Failed to load Ganesha idol image", e);
+        }
       } else if (bgStyle === 'no_ai_royal') {
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         gradient.addColorStop(0, '#510f13'); // Deep maroon
