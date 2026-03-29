@@ -148,7 +148,7 @@ export default function Home() {
         const base64Data = frameDataUrl.split(',')[1];
 
         const visionResponse = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-preview',
+          model: 'gemini-2.0-flash',
           contents: {
             parts: [
               { inlineData: { data: base64Data, mimeType: 'image/jpeg' } },
@@ -163,15 +163,15 @@ export default function Home() {
 
       if (!finalPrompt) return null;
 
+      // Use gemini-2.0-flash-exp for image generation (has free-tier quota)
+      // Requires responseModalities: ["TEXT", "IMAGE"] for native image output
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
+        model: 'gemini-2.0-flash-exp',
         contents: {
-          parts: [{ text: finalPrompt }],
+          parts: [{ text: `Generate an image: ${finalPrompt}. The image must be in portrait 9:16 aspect ratio.` }],
         },
         config: {
-          imageConfig: {
-            aspectRatio: "9:16",
-          }
+          responseModalities: ["TEXT", "IMAGE"],
         }
       });
 
@@ -183,8 +183,16 @@ export default function Home() {
         }
       }
       throw new Error("No image data found in AI response");
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating background:', error);
+
+      // Check for rate-limit / quota-exceeded errors (HTTP 429)
+      const errorMsg = error?.message || error?.toString() || '';
+      if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota')) {
+        setStatusText('⚠️ API quota exceeded. Please wait a minute and try again, or use a different API key.');
+        return null; // Don't retry on quota errors — it won't help
+      }
+
       if (retryCount < 2) {
         setStatusText(`Retrying background generation... (${retryCount + 1}/2)`);
         await new Promise(resolve => setTimeout(resolve, 2000));
